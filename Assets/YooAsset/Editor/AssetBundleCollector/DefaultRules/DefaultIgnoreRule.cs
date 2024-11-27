@@ -23,6 +23,9 @@ namespace YooAsset.Editor
         /// </summary>
         public bool IsIgnore(AssetInfo assetInfo)
         {
+            // 忽略Gizmos文件夹
+            if (assetInfo.AssetPath.Contains("Gizmos")) return true;
+            
             if (assetInfo.AssetPath.StartsWith("Assets/") == false && assetInfo.AssetPath.StartsWith("Packages/") == false)
             {
                 UnityEngine.Debug.LogError($"Invalid asset path : {assetInfo.AssetPath}");
