@@ -9,6 +9,30 @@ namespace YooAsset
     internal static class ManifestTools
     {
         /// <summary>
+        /// 验证清单文件的二进制数据
+        /// </summary>
+        public static bool VerifyManifestData(byte[] fileData, string hashValue)
+        {
+            if (fileData == null || fileData.Length == 0)
+                return false;
+            if (string.IsNullOrEmpty(hashValue))
+                return false;
+
+            // 注意：兼容俩种验证方式
+            // 注意：计算MD5的哈希值通常为32个字符
+            string fileHash;
+            if (hashValue.Length == 32)
+                fileHash = HashUtility.BytesMD5(fileData);
+            else
+                fileHash = HashUtility.BytesCRC32(fileData);
+
+            if (fileHash == hashValue)
+                return true;
+            else
+                return false;
+        }
+
+        /// <summary>
         /// 序列化（JSON文件）
         /// </summary>
         public static void SerializeToJson(string savePath, PackageManifest manifest)
@@ -197,9 +221,16 @@ namespace YooAsset
             manifest.AssetDic = new Dictionary<string, PackageAsset>(assetCount);
 
             if (manifest.EnableAddressable)
+            {
                 manifest.AssetPathMapping1 = new Dictionary<string, string>(assetCount * 3);
+            }
             else
-                manifest.AssetPathMapping1 = new Dictionary<string, string>(assetCount * 2);
+            {
+                if (manifest.LocationToLower)
+                    manifest.AssetPathMapping1 = new Dictionary<string, string>(assetCount * 2, StringComparer.OrdinalIgnoreCase);
+                else
+                    manifest.AssetPathMapping1 = new Dictionary<string, string>(assetCount * 2);
+            }
 
             if (manifest.IncludeAssetGUID)
                 manifest.AssetPathMapping2 = new Dictionary<string, string>(assetCount);
@@ -221,8 +252,6 @@ namespace YooAsset
             // 填充AssetPathMapping1
             {
                 string location = packageAsset.AssetPath;
-                if (manifest.LocationToLower)
-                    location = location.ToLower();
 
                 // 添加原生路径的映射
                 if (manifest.AssetPathMapping1.ContainsKey(location))
@@ -284,27 +313,6 @@ namespace YooAsset
             manifest.BundleDic3.Add(packageBundle.BundleGUID, packageBundle);
         }
         #endregion
-
-        /// <summary>
-        /// 注意：该类拷贝自编辑器
-        /// </summary>
-        private enum EFileNameStyle
-        {
-            /// <summary>
-            /// 哈希值名称
-            /// </summary>
-            HashName = 0,
-
-            /// <summary>
-            /// 资源包名称（不推荐）
-            /// </summary>
-            BundleName = 1,
-
-            /// <summary>
-            /// 资源包名称 + 哈希值名称
-            /// </summary>
-            BundleName_HashName = 2,
-        }
 
         /// <summary>
         /// 获取资源文件的后缀名

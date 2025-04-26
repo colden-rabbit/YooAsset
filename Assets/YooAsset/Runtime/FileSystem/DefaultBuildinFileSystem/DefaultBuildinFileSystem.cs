@@ -59,6 +59,11 @@ namespace YooAsset
         public EFileVerifyLevel FileVerifyLevel { private set; get; } = EFileVerifyLevel.Middle;
 
         /// <summary>
+        /// 自定义参数：覆盖安装缓存清理模式
+        /// </summary>
+        public EOverwriteInstallClearMode InstallClearMode { private set; get; } = EOverwriteInstallClearMode.ClearAllManifestFiles;
+
+        /// <summary>
         /// 自定义参数：数据文件追加文件格式
         /// </summary>
         public bool AppendFileExtension { private set; get; } = false;
@@ -104,15 +109,15 @@ namespace YooAsset
             var operation = new DBFSRequestPackageVersionOperation(this);
             return operation;
         }
-        public virtual FSClearCacheFilesOperation ClearCacheFilesAsync(PackageManifest manifest, string clearMode, object clearParam)
+        public virtual FSClearCacheFilesOperation ClearCacheFilesAsync(PackageManifest manifest, ClearCacheFilesOptions options)
         {
-            return _unpackFileSystem.ClearCacheFilesAsync(manifest, clearMode, clearParam);
+            return _unpackFileSystem.ClearCacheFilesAsync(manifest, options);
         }
-        public virtual FSDownloadFileOperation DownloadFileAsync(PackageBundle bundle, DownloadParam param)
+        public virtual FSDownloadFileOperation DownloadFileAsync(PackageBundle bundle, DownloadFileOptions options)
         {
             // 注意：业务层的解压下载器会依赖内置文件系统的下载方法
-            param.ImportFilePath = GetBuildinFileLoadPath(bundle);
-            return _unpackFileSystem.DownloadFileAsync(bundle, param);
+            options.ImportFilePath = GetBuildinFileLoadPath(bundle);
+            return _unpackFileSystem.DownloadFileAsync(bundle, options);
         }
         public virtual FSLoadBundleOperation LoadBundleFile(PackageBundle bundle)
         {
@@ -144,6 +149,10 @@ namespace YooAsset
             if (name == FileSystemParametersDefine.FILE_VERIFY_LEVEL)
             {
                 FileVerifyLevel = (EFileVerifyLevel)value;
+            }
+            else if (name == FileSystemParametersDefine.INSTALL_CLEAR_MODE)
+            {
+                InstallClearMode = (EOverwriteInstallClearMode)value;
             }
             else if (name == FileSystemParametersDefine.APPEND_FILE_EXTENSION)
             {
@@ -184,6 +193,7 @@ namespace YooAsset
             _unpackFileSystem = new DefaultUnpackFileSystem();
             _unpackFileSystem.SetParameter(FileSystemParametersDefine.REMOTE_SERVICES, remoteServices);
             _unpackFileSystem.SetParameter(FileSystemParametersDefine.FILE_VERIFY_LEVEL, FileVerifyLevel);
+            _unpackFileSystem.SetParameter(FileSystemParametersDefine.INSTALL_CLEAR_MODE, InstallClearMode);
             _unpackFileSystem.SetParameter(FileSystemParametersDefine.APPEND_FILE_EXTENSION, AppendFileExtension);
             _unpackFileSystem.SetParameter(FileSystemParametersDefine.DECRYPTION_SERVICES, DecryptionServices);
             _unpackFileSystem.OnCreate(packageName, null);

@@ -100,7 +100,7 @@ namespace YooAsset
             var playModeImpl = new PlayModeImpl(PackageName, _playMode);
             _bundleQuery = playModeImpl;
             _playModeImpl = playModeImpl;
-            _resourceManager.Initialize(_bundleQuery);
+            _resourceManager.Initialize(parameters, _bundleQuery);
 
             // 初始化资源系统
             InitializationOperation initializeOperation;
@@ -161,6 +161,10 @@ namespace YooAsset
             if (parameters is EditorSimulateModeParameters)
                 throw new Exception($"Editor simulate mode only support unity editor.");
 #endif
+
+            // 检测初始化参数
+            if (parameters.BundleLoadingMaxConcurrency <= 0)
+                throw new Exception($"{nameof(parameters.BundleLoadingMaxConcurrency)} value must be greater than zero.");
 
             // 鉴定运行模式
             if (parameters is EditorSimulateModeParameters)
@@ -264,7 +268,10 @@ namespace YooAsset
         public ClearCacheFilesOperation ClearCacheFilesAsync(EFileClearMode clearMode, object clearParam = null)
         {
             DebugCheckInitialize(false);
-            var operation = _playModeImpl.ClearCacheFilesAsync(clearMode.ToString(), clearParam);
+            ClearCacheFilesOptions options = new ClearCacheFilesOptions();
+            options.ClearMode = clearMode.ToString();
+            options.ClearParam = clearParam;
+            var operation = _playModeImpl.ClearCacheFilesAsync(options);
             OperationSystem.StartOperation(PackageName, operation);
             return operation;
         }
@@ -277,7 +284,10 @@ namespace YooAsset
         public ClearCacheFilesOperation ClearCacheFilesAsync(string clearMode, object clearParam = null)
         {
             DebugCheckInitialize(false);
-            var operation = _playModeImpl.ClearCacheFilesAsync(clearMode, clearParam);
+            ClearCacheFilesOptions options = new ClearCacheFilesOptions();
+            options.ClearMode = clearMode;
+            options.ClearParam = clearParam;
+            var operation = _playModeImpl.ClearCacheFilesAsync(options);
             OperationSystem.StartOperation(PackageName, operation);
             return operation;
         }

@@ -66,6 +66,11 @@ namespace YooAsset
         public EFileVerifyLevel FileVerifyLevel { private set; get; } = EFileVerifyLevel.Middle;
 
         /// <summary>
+        /// 自定义参数：覆盖安装缓存清理模式
+        /// </summary>
+        public EOverwriteInstallClearMode InstallClearMode { private set; get; } = EOverwriteInstallClearMode.ClearAllManifestFiles;
+
+        /// <summary>
         /// 自定义参数：数据文件追加文件格式
         /// </summary>
         public bool AppendFileExtension { private set; get; } = false;
@@ -115,43 +120,43 @@ namespace YooAsset
             var operation = new DCFSRequestPackageVersionOperation(this, appendTimeTicks, timeout);
             return operation;
         }
-        public virtual FSClearCacheFilesOperation ClearCacheFilesAsync(PackageManifest manifest, string clearMode, object clearParam)
+        public virtual FSClearCacheFilesOperation ClearCacheFilesAsync(PackageManifest manifest, ClearCacheFilesOptions options)
         {
-            if (clearMode == EFileClearMode.ClearAllBundleFiles.ToString())
+            if (options.ClearMode == EFileClearMode.ClearAllBundleFiles.ToString())
             {
                 var operation = new ClearAllCacheBundleFilesOperation(this);
                 return operation;
             }
-            else if (clearMode == EFileClearMode.ClearUnusedBundleFiles.ToString())
+            else if (options.ClearMode == EFileClearMode.ClearUnusedBundleFiles.ToString())
             {
                 var operation = new ClearUnusedCacheBundleFilesOperation(this, manifest);
                 return operation;
             }
-            else if (clearMode == EFileClearMode.ClearBundleFilesByTags.ToString())
+            else if (options.ClearMode == EFileClearMode.ClearBundleFilesByTags.ToString())
             {
-                var operation = new ClearCacheBundleFilesByTagsOperaiton(this, manifest, clearParam);
+                var operation = new ClearCacheBundleFilesByTagsOperaiton(this, manifest, options.ClearParam);
                 return operation;
             }
-            else if (clearMode == EFileClearMode.ClearAllManifestFiles.ToString())
+            else if (options.ClearMode == EFileClearMode.ClearAllManifestFiles.ToString())
             {
                 var operation = new ClearAllCacheManifestFilesOperation(this);
                 return operation;
             }
-            else if (clearMode == EFileClearMode.ClearUnusedManifestFiles.ToString())
+            else if (options.ClearMode == EFileClearMode.ClearUnusedManifestFiles.ToString())
             {
                 var operation = new ClearUnusedCacheManifestFilesOperation(this, manifest);
                 return operation;
             }
             else
             {
-                string error = $"Invalid clear mode : {clearMode}";
+                string error = $"Invalid clear mode : {options.ClearMode}";
                 var operation = new FSClearCacheFilesCompleteOperation(error);
                 return operation;
             }
         }
-        public virtual FSDownloadFileOperation DownloadFileAsync(PackageBundle bundle, DownloadParam param)
+        public virtual FSDownloadFileOperation DownloadFileAsync(PackageBundle bundle, DownloadFileOptions options)
         {
-            var downloader = DownloadCenter.DownloadFileAsync(bundle, param);
+            var downloader = DownloadCenter.DownloadFileAsync(bundle, options);
             downloader.Reference(); //增加下载器的引用计数
 
             // 注意：将下载器进行包裹，可以避免父类任务终止的时候，连带子任务里的下载器也一起被终止！
@@ -187,6 +192,10 @@ namespace YooAsset
             else if (name == FileSystemParametersDefine.FILE_VERIFY_LEVEL)
             {
                 FileVerifyLevel = (EFileVerifyLevel)value;
+            }
+            else if (name == FileSystemParametersDefine.INSTALL_CLEAR_MODE)
+            {
+                InstallClearMode = (EOverwriteInstallClearMode)value;
             }
             else if (name == FileSystemParametersDefine.APPEND_FILE_EXTENSION)
             {
@@ -227,8 +236,8 @@ namespace YooAsset
                 _packageRoot = packageRoot;
 
             _cacheBundleFilesRoot = PathUtility.Combine(_packageRoot, DefaultCacheFileSystemDefine.BundleFilesFolderName);
-            _tempFilesRoot = PathUtility.Combine(_packageRoot, DefaultCacheFileSystemDefine.TempFilesFolderName);
             _cacheManifestFilesRoot = PathUtility.Combine(_packageRoot, DefaultCacheFileSystemDefine.ManifestFilesFolderName);
+            _tempFilesRoot = PathUtility.Combine(_packageRoot, DefaultCacheFileSystemDefine.TempFilesFolderName);
         }
         public virtual void OnDestroy()
         {
@@ -500,7 +509,18 @@ namespace YooAsset
         }
 
         /// <summary>
-        /// 删除所有清单文件
+        /// 删除所有缓存的资源文件
+        /// </summary>
+        public void DeleteAllBundleFiles()
+        {
+            if (Directory.Exists(_cacheBundleFilesRoot))
+            {
+                Directory.Delete(_cacheBundleFilesRoot, true);
+            }
+        }
+
+        /// <summary>
+        /// 删除所有缓存的清单文件
         /// </summary>
         public void DeleteAllManifestFiles()
         {
