@@ -1,24 +1,23 @@
-﻿#if UNITY_WEBGL && DOUYINMINIGAME
+﻿#if UNITY_WEBGL && WEIXINMINIGAME
+using System;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using YooAsset;
-using TTSDK;
-using System.Linq;
-using System;
+using WeChatWASM;
 
-public static class TiktokFileSystemCreater
+public static class WechatFileSystemCreater
 {
     public static FileSystemParameters CreateFileSystemParameters(string packageRoot, IRemoteServices remoteServices)
     {
-        string fileSystemClass = $"{nameof(TiktokFileSystem)},YooAsset.RuntimeExtension";
+        string fileSystemClass = $"{nameof(WechatFileSystem)},YooAsset.MiniGame";
         var fileSystemParams = new FileSystemParameters(fileSystemClass, packageRoot);
         fileSystemParams.AddParameter(FileSystemParametersDefine.REMOTE_SERVICES, remoteServices);
         return fileSystemParams;
     }
-
     public static FileSystemParameters CreateFileSystemParameters(string packageRoot, IRemoteServices remoteServices, IWebDecryptionServices decryptionServices)
     {
-        string fileSystemClass = $"{nameof(TiktokFileSystem)},YooAsset.RuntimeExtension";
+        string fileSystemClass = $"{nameof(WechatFileSystem)},YooAsset.MiniGame";
         var fileSystemParams = new FileSystemParameters(fileSystemClass, packageRoot);
         fileSystemParams.AddParameter(FileSystemParametersDefine.REMOTE_SERVICES, remoteServices);
         fileSystemParams.AddParameter(FileSystemParametersDefine.DECRYPTION_SERVICES, decryptionServices);
@@ -27,10 +26,10 @@ public static class TiktokFileSystemCreater
 }
 
 /// <summary>
-/// 抖音小游戏文件系统
-/// 参考：https://developer.open-douyin.com/docs/resource/zh-CN/mini-game/develop/guide/know
+/// 微信小游戏文件系统
+/// 参考：https://wechat-miniprogram.github.io/minigame-unity-webgl-transform/Design/UsingAssetBundle.html
 /// </summary>
-internal class TiktokFileSystem : IFileSystem
+internal class WechatFileSystem : IFileSystem
 {
     private class WebRemoteServices : IRemoteServices
     {
@@ -63,13 +62,15 @@ internal class TiktokFileSystem : IFileSystem
     }
 
     private readonly Dictionary<string, string> _cacheFilePathMapping = new Dictionary<string, string>(10000);
-    private TTFileSystemManager _fileSystemMgr;
-    private string _ttCacheRoot = string.Empty;
+    private WXFileSystemManager _fileSystemMgr;
+    private string _wxCacheRoot = string.Empty;
 
     /// <summary>
     /// 包裹名称
     /// </summary>
     public string PackageName { private set; get; }
+
+    private readonly string _packageRoot = YooAssetSettingsData.Setting.DefaultYooFolderName;
 
     /// <summary>
     /// 文件根目录
@@ -78,7 +79,7 @@ internal class TiktokFileSystem : IFileSystem
     {
         get
         {
-            return _ttCacheRoot;
+            return _wxCacheRoot;
         }
     }
 
@@ -106,46 +107,60 @@ internal class TiktokFileSystem : IFileSystem
     #endregion
 
 
-    public TiktokFileSystem()
+    public WechatFileSystem()
     {
     }
     public virtual FSInitializeFileSystemOperation InitializeFileSystemAsync()
     {
-        var operation = new TTFSInitializeOperation(this);
+        var operation = new WXFSInitializeOperation(this);
         return operation;
     }
     public virtual FSLoadPackageManifestOperation LoadPackageManifestAsync(string packageVersion, int timeout)
     {
-        var operation = new TTFSLoadPackageManifestOperation(this, packageVersion, timeout);
+        var operation = new WXFSLoadPackageManifestOperation(this, packageVersion, timeout);
         return operation;
     }
     public virtual FSRequestPackageVersionOperation RequestPackageVersionAsync(bool appendTimeTicks, int timeout)
     {
-        var operation = new TTFSRequestPackageVersionOperation(this, timeout);
+        var operation = new WXFSRequestPackageVersionOperation(this, appendTimeTicks, timeout);
         return operation;
     }
     public virtual FSClearCacheFilesOperation ClearCacheFilesAsync(PackageManifest manifest, ClearCacheFilesOptions options)
     {
-        var operation = new FSClearCacheFilesCompleteOperation();
-        return operation;
+        if (options.ClearMode == EFileClearMode.ClearAllBundleFiles.ToString())
+        {
+            var operation = new WXFSClearAllBundleFilesOperation(this);
+            return operation;
+        }
+        else if (options.ClearMode == EFileClearMode.ClearUnusedBundleFiles.ToString())
+        {
+            var operation = new WXFSClearUnusedBundleFilesAsync(this, manifest);
+            return operation;
+        }
+        else
+        {
+            string error = $"Invalid clear mode : {options.ClearMode}";
+            var operation = new FSClearCacheFilesCompleteOperation(error);
+            return operation;
+        }
     }
     public virtual FSDownloadFileOperation DownloadFileAsync(PackageBundle bundle, DownloadFileOptions options)
     {
         options.MainURL = RemoteServices.GetRemoteMainURL(bundle.FileName);
         options.FallbackURL = RemoteServices.GetRemoteFallbackURL(bundle.FileName);
-        var operation = new TTFSDownloadFileOperation(this, bundle, options);
+        var operation = new WXFSDownloadFileOperation(this, bundle, options);
         return operation;
     }
     public virtual FSLoadBundleOperation LoadBundleFile(PackageBundle bundle)
     {
         if (bundle.BundleType == (int)EBuildBundleType.AssetBundle)
         {
-            var operation = new TTFSLoadBundleOperation(this, bundle);
+            var operation = new WXFSLoadBundleOperation(this, bundle);
             return operation;
         }
         else
         {
-            string error = $"{nameof(TiktokFileSystem)} not support load bundle type : {bundle.BundleType}";
+            string error = $"{nameof(WechatFileSystem)} not support load bundle type : {bundle.BundleType}";
             var operation = new FSLoadBundleCompleteOperation(error);
             return operation;
         }
@@ -166,24 +181,33 @@ internal class TiktokFileSystem : IFileSystem
             YooLogger.Warning($"Invalid parameter : {name}");
         }
     }
-    public virtual void OnCreate(string packageName, string rootDirectory)
+    public virtual void OnCreate(string packageName, string packageRoot)
     {
         PackageName = packageName;
-        _ttCacheRoot = rootDirectory;
+        _wxCacheRoot = packageRoot;
 
-        if (string.IsNullOrEmpty(_ttCacheRoot))
+        if (string.IsNullOrEmpty(_wxCacheRoot))
         {
-            throw new System.Exception("请配置抖音小游戏的缓存根目录！");
+            throw new System.Exception("请配置微信小游戏缓存根目录！");
         }
 
-        // 注意：CDN服务未启用的情况下，使用抖音WEB服务器
+        // 注意：CDN服务未启用的情况下，使用微信WEB服务器
         if (RemoteServices == null)
         {
             string webRoot = PathUtility.Combine(Application.streamingAssetsPath, YooAssetSettingsData.Setting.DefaultYooFolderName, packageName);
             RemoteServices = new WebRemoteServices(webRoot);
         }
 
-        _fileSystemMgr = TT.GetFileSystemManager();
+        // 检查URL双斜杠
+        // 注意：双斜杠会导致微信插件加载文件失败，但网络请求又不返回失败！
+        {
+            var mainURL = RemoteServices.GetRemoteMainURL("test.bundle");
+            var fallbackURL = RemoteServices.GetRemoteFallbackURL("test.bundle");
+            if (PathUtility.HasDoubleSlashes(mainURL) || PathUtility.HasDoubleSlashes(fallbackURL))
+                throw new Exception($"{nameof(RemoteServices)} returned URL contains double slashes. !");
+        }
+
+        _fileSystemMgr = WX.GetFileSystemManager();
     }
     public virtual void OnDestroy()
     {
@@ -195,7 +219,8 @@ internal class TiktokFileSystem : IFileSystem
     }
     public virtual bool Exists(PackageBundle bundle)
     {
-        return CheckCacheFileExist(bundle);
+        string filePath = GetCacheFileLoadPath(bundle);
+        return CheckCacheFileExist(filePath);
     }
     public virtual bool NeedDownload(PackageBundle bundle)
     {
@@ -219,44 +244,39 @@ internal class TiktokFileSystem : IFileSystem
     }
     public virtual byte[] ReadBundleFileData(PackageBundle bundle)
     {
-        if (CheckCacheFileExist(bundle))
-        {
-            string filePath = GetCacheFileLoadPath(bundle);
+        string filePath = GetCacheFileLoadPath(bundle);
+        if (CheckCacheFileExist(filePath))
             return _fileSystemMgr.ReadFileSync(filePath);
-        }
         else
-        {
             return Array.Empty<byte>();
-        }
     }
     public virtual string ReadBundleFileText(PackageBundle bundle)
     {
-        if (CheckCacheFileExist(bundle))
-        {
-            string filePath = GetCacheFileLoadPath(bundle);
+        string filePath = GetCacheFileLoadPath(bundle);
+        if (CheckCacheFileExist(filePath))
             return _fileSystemMgr.ReadFileSync(filePath, "utf8");
-        }
         else
-        {
             return string.Empty;
-        }
     }
 
     #region 内部方法
-    public TTFileSystemManager GetFileSystemMgr()
+    public WXFileSystemManager GetFileSystemMgr()
     {
         return _fileSystemMgr;
     }
-    public bool CheckCacheFileExist(PackageBundle bundle)
+    public bool CheckCacheFileExist(string filePath)
     {
-        string url = RemoteServices.GetRemoteMainURL(bundle.FileName);
-        return _fileSystemMgr.IsUrlCached(url);
+        string result = WX.GetCachePath(filePath);
+        if (string.IsNullOrEmpty(result))
+            return false;
+        else
+            return true;
     }
-    private string GetCacheFileLoadPath(PackageBundle bundle)
+    public string GetCacheFileLoadPath(PackageBundle bundle)
     {
         if (_cacheFilePathMapping.TryGetValue(bundle.BundleGUID, out string filePath) == false)
         {
-            filePath = _fileSystemMgr.GetLocalCachedPathForUrl(bundle.FileName);
+            filePath = PathUtility.Combine(_wxCacheRoot, bundle.FileName);
             _cacheFilePathMapping.Add(bundle.BundleGUID, filePath);
         }
         return filePath;
