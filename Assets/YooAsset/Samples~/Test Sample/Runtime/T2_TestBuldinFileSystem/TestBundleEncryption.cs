@@ -13,9 +13,22 @@ public class TestBundleEncryption
         ResourcePackage package = YooAssets.GetPackage(TestDefine.AssetBundlePackageName);
         Assert.IsNotNull(package);
 
-        // 加载音乐播放预制体
+        // 异步加载音乐播放预制体
         {
-            var assetHandle = package.LoadAssetAsync<GameObject>("prefab_audio");
+            var assetHandle = package.LoadAssetAsync<GameObject>("prefab_audioA");
+            yield return assetHandle;
+            Assert.AreEqual(EOperationStatus.Succeed, assetHandle.Status);
+
+            var go = assetHandle.InstantiateSync(Vector3.zero, Quaternion.identity);
+            Assert.IsNotNull(go);
+
+            var audioSource = go.GetComponent<AudioSource>();
+            Assert.IsNotNull(audioSource.clip);
+        }
+
+        // 同步加载音乐播放预制体
+        {
+            var assetHandle = package.LoadAssetSync<GameObject>("prefab_audioB");
             yield return assetHandle;
             Assert.AreEqual(EOperationStatus.Succeed, assetHandle.Status);
 

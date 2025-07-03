@@ -2,11 +2,12 @@
 
 All notable changes to this package will be documented in this file.
 
-## [2.3.11] - 2025-06-30
+## [2.3.12] - 2025-07-01
 
 ### Improvements
 
 - 优化了同步接口导致的资源拷贝和资源验证性能开销高的现象。
+- 微信小游戏和抖音小游戏支持资源清单加密。
 
 ### Fixed
 
