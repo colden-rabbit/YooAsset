@@ -11,8 +11,8 @@ using YooAsset;
 
 public class T2_TestBuldinFileSystem : IPrebuildSetup, IPostBuildCleanup
 {
-    private const string ASSET_BUNDLE_PACKAGE_ROOT_KEY = "T2_ASSET_BUNDLE_PACKAGE_ROOT_KEY";
-    private const string RAW_BUNDLE_PACKAGE_ROOT_KEY = "T2_RAW_BUNDLE_PACKAGE_ROOT_KEY";
+    public const string ASSET_BUNDLE_PACKAGE_ROOT_KEY = "T2_ASSET_BUNDLE_PACKAGE_ROOT_KEY";
+    public const string RAW_BUNDLE_PACKAGE_ROOT_KEY = "T2_RAW_BUNDLE_PACKAGE_ROOT_KEY";
 
     void IPrebuildSetup.Setup()
     {
@@ -24,7 +24,7 @@ public class T2_TestBuldinFileSystem : IPrebuildSetup, IPostBuildCleanup
             buildParams.InvokeAssmeblyName = "YooAsset.Test.Editor";
             buildParams.InvokeClassFullName = "TestPackageBuilder";
             buildParams.InvokeMethodName = "BuildPackage";
-            var simulateResult = PakcageInvokeBuilder.InvokeBuilder(buildParams);
+            var simulateResult = PackageInvokeBuilder.InvokeBuilder(buildParams);
             UnityEditor.EditorPrefs.SetString(ASSET_BUNDLE_PACKAGE_ROOT_KEY, simulateResult.PackageRootDirectory);
         }
 
@@ -35,7 +35,7 @@ public class T2_TestBuldinFileSystem : IPrebuildSetup, IPostBuildCleanup
             buildParams.InvokeAssmeblyName = "YooAsset.Test.Editor";
             buildParams.InvokeClassFullName = "TestPackageBuilder";
             buildParams.InvokeMethodName = "BuildPackage";
-            var simulateResult = PakcageInvokeBuilder.InvokeBuilder(buildParams);
+            var simulateResult = PackageInvokeBuilder.InvokeBuilder(buildParams);
             UnityEditor.EditorPrefs.SetString(RAW_BUNDLE_PACKAGE_ROOT_KEY, simulateResult.PackageRootDirectory);
         }
 #endif
@@ -61,10 +61,10 @@ public class T2_TestBuldinFileSystem : IPrebuildSetup, IPostBuildCleanup
             // 初始化资源包
             var initParams = new OfflinePlayModeParameters();
             var fileDecryption = new TestFileStreamDecryption();
-            var manifestProcess = new TestProcessManifest();
+            var manifestServices = new TestRestoreManifest();
             initParams.BuildinFileSystemParameters = FileSystemParameters.CreateDefaultBuildinFileSystemParameters(fileDecryption, packageRoot);
             initParams.BuildinFileSystemParameters.AddParameter(FileSystemParametersDefine.DISABLE_CATALOG_FILE, true);
-            initParams.BuildinFileSystemParameters.AddParameter(FileSystemParametersDefine.MANIFEST_SERVICES, manifestProcess);
+            initParams.BuildinFileSystemParameters.AddParameter(FileSystemParametersDefine.MANIFEST_SERVICES, manifestServices);
             var initializeOp = package.InitializeAsync(initParams);
             yield return initializeOp;
             if (initializeOp.Status != EOperationStatus.Succeed)
@@ -125,30 +125,30 @@ public class T2_TestBuldinFileSystem : IPrebuildSetup, IPostBuildCleanup
     }
 
     [UnityTest]
-    public IEnumerator B1_TestLoadAsyncTask()
+    public IEnumerator B1_TestAsyncTask()
     {
-        var tester = new TestLoadPanel();
+        var tester = new TestAsyncTask();
         yield return tester.RuntimeTester();
     }
 
     [UnityTest]
-    public IEnumerator B2_TestLoadAudio()
+    public IEnumerator B2_TestLoadAsset()
     {
-        var tester = new TestLoadAudio();
+        var tester = new TestLoadAsset();
         yield return tester.RuntimeTester();
     }
 
     [UnityTest]
-    public IEnumerator B3_TestLoadImage()
+    public IEnumerator B3_TestLoadSubAssets()
     {
-        var tester = new TestLoadImage();
+        var tester = new TestLoadSubAssets();
         yield return tester.RuntimeTester();
     }
 
     [UnityTest]
-    public IEnumerator B4_TestLoadPrefab()
+    public IEnumerator B4_TestLoadAllAssets()
     {
-        var tester = new TestLoadPrefab();
+        var tester = new TestLoadAllAssets();
         yield return tester.RuntimeTester();
     }
 
@@ -186,11 +186,11 @@ public class T2_TestBuldinFileSystem : IPrebuildSetup, IPostBuildCleanup
         var tester = new TestLoadVideo();
         yield return tester.RuntimeTester();
     }
-    
+
     [UnityTest]
-    public IEnumerator C1_TestBundleReference()
+    public IEnumerator C1_TestGetAssetInfos()
     {
-        var tester = new TestBundleReference();
+        var tester = new TestGetAssetInfos();
         yield return tester.RuntimeTester();
     }
 
@@ -202,32 +202,30 @@ public class T2_TestBuldinFileSystem : IPrebuildSetup, IPostBuildCleanup
     }
 
     [UnityTest]
+    public IEnumerator C3_TestBundleUnpacker()
+    {
+        var tester = new TestBundleUnpacker();
+        yield return tester.RuntimeTester();
+    }
+
+    [UnityTest]
+    public IEnumerator C4_TestBundleReference()
+    {
+        var tester = new TestBundleReference();
+        yield return tester.RuntimeTester();
+    }
+
+    [UnityTest]
+    public IEnumerator C4_TestBundleUnload()
+    {
+        var tester = new TestBundleUnload();
+        yield return tester.RuntimeTester();
+    }
+
+    [UnityTest]
     public IEnumerator D_DestroyPackage()
     {
-        // 销毁旧资源包
-        {
-            var package = YooAssets.GetPackage(TestDefine.AssetBundlePackageName);
-            var destroyOp = package.DestroyAsync();
-            yield return destroyOp;
-            if (destroyOp.Status != EOperationStatus.Succeed)
-                Debug.LogError(destroyOp.Error);
-            Assert.AreEqual(EOperationStatus.Succeed, destroyOp.Status);
-
-            bool result = YooAssets.RemovePackage(TestDefine.AssetBundlePackageName);
-            Assert.IsTrue(result);
-        }
-
-        // 销毁旧资源包
-        {
-            var package = YooAssets.GetPackage(TestDefine.RawBundlePackageName);
-            var destroyOp = package.DestroyAsync();
-            yield return destroyOp;
-            if (destroyOp.Status != EOperationStatus.Succeed)
-                Debug.LogError(destroyOp.Error);
-            Assert.AreEqual(EOperationStatus.Succeed, destroyOp.Status);
-
-            bool result = YooAssets.RemovePackage(TestDefine.RawBundlePackageName);
-            Assert.IsTrue(result);
-        }
+        var tester = new TestDestroyPackage();
+        yield return tester.RuntimeTester(true);
     }
 }
