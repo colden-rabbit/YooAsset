@@ -152,19 +152,19 @@ namespace YooAsset
         private void CheckInitializeParameters(InitializeParameters parameters)
         {
             if (_isInitialize)
-                throw new Exception($"{nameof(ResourcePackage)} is initialized yet.");
+                throw new YooPackageException(PackageName, $"Package '{PackageName}' is already initialized !");
 
             if (parameters == null)
-                throw new Exception($"{nameof(ResourcePackage)} create parameters is null.");
+                throw new YooPackageException(PackageName, $"Initialize parameters cannot be null.");
 
 #if !UNITY_EDITOR
             if (parameters is EditorSimulateModeParameters)
-                throw new Exception($"Editor simulate mode only support unity editor.");
+                throw new YooPlatformNotSupportedException($"Editor simulate mode only support unity editor.");
 #endif
 
             // 检测初始化参数
             if (parameters.BundleLoadingMaxConcurrency <= 0)
-                throw new Exception($"{nameof(parameters.BundleLoadingMaxConcurrency)} value must be greater than zero.");
+                throw new YooPackageException(PackageName, $"{nameof(parameters.BundleLoadingMaxConcurrency)} value must be greater than zero.");
 
             // 鉴定运行模式
             if (parameters is EditorSimulateModeParameters)
@@ -186,12 +186,12 @@ namespace YooAsset
 #if UNITY_WEBGL
                 if (_playMode != EPlayMode.WebPlayMode)
                 {
-                    throw new Exception($"{_playMode} can not support WebGL plateform !");
+                    throw new YooPlatformNotSupportedException($"{_playMode} can not support WebGL plateform !");
                 }
 #else
                 if (_playMode == EPlayMode.WebPlayMode)
                 {
-                    throw new Exception($"{nameof(EPlayMode.WebPlayMode)} only support WebGL plateform !");
+                    throw new YooPlatformNotSupportedException($"{nameof(EPlayMode.WebPlayMode)} only support WebGL plateform !");
                 }
 #endif
             }
@@ -209,7 +209,10 @@ namespace YooAsset
         /// </summary>
         public DestroyOperation DestroyAsync()
         {
-            var operation = new DestroyOperation(this);
+            var options = new UnloadAllAssetsOptions();
+            options.ReleaseAllHandles = true;
+            options.LockLoadOperation = true;
+            var operation = new DestroyOperation(this, options);
             OperationSystem.StartOperation(null, operation);
             return operation;
         }
@@ -966,8 +969,7 @@ namespace YooAsset
         /// </summary>
         /// <param name="downloadingMaxNumber">同时下载的最大文件数</param>
         /// <param name="failedTryAgain">下载失败的重试次数</param>
-        /// <param name="timeout">超时时间</param>
-        public ResourceDownloaderOperation CreateResourceDownloader(int downloadingMaxNumber, int failedTryAgain, int timeout = 60)
+        public ResourceDownloaderOperation CreateResourceDownloader(int downloadingMaxNumber, int failedTryAgain)
         {
             DebugCheckInitialize();
             return _playModeImpl.CreateResourceDownloaderByAll(downloadingMaxNumber, failedTryAgain);
@@ -979,8 +981,7 @@ namespace YooAsset
         /// <param name="tag">资源标签</param>
         /// <param name="downloadingMaxNumber">同时下载的最大文件数</param>
         /// <param name="failedTryAgain">下载失败的重试次数</param>
-        /// <param name="timeout">超时时间</param>
-        public ResourceDownloaderOperation CreateResourceDownloader(string tag, int downloadingMaxNumber, int failedTryAgain, int timeout = 60)
+        public ResourceDownloaderOperation CreateResourceDownloader(string tag, int downloadingMaxNumber, int failedTryAgain)
         {
             DebugCheckInitialize();
             return _playModeImpl.CreateResourceDownloaderByTags(new string[] { tag }, downloadingMaxNumber, failedTryAgain);
@@ -992,8 +993,7 @@ namespace YooAsset
         /// <param name="tags">资源标签列表</param>
         /// <param name="downloadingMaxNumber">同时下载的最大文件数</param>
         /// <param name="failedTryAgain">下载失败的重试次数</param>
-        /// <param name="timeout">超时时间</param>
-        public ResourceDownloaderOperation CreateResourceDownloader(string[] tags, int downloadingMaxNumber, int failedTryAgain, int timeout = 60)
+        public ResourceDownloaderOperation CreateResourceDownloader(string[] tags, int downloadingMaxNumber, int failedTryAgain)
         {
             DebugCheckInitialize();
             return _playModeImpl.CreateResourceDownloaderByTags(tags, downloadingMaxNumber, failedTryAgain);
@@ -1006,15 +1006,14 @@ namespace YooAsset
         /// <param name="recursiveDownload">下载资源对象所属资源包内所有资源对象依赖的资源包</param>
         /// <param name="downloadingMaxNumber">同时下载的最大文件数</param>
         /// <param name="failedTryAgain">下载失败的重试次数</param>
-        /// <param name="timeout">超时时间</param>
-        public ResourceDownloaderOperation CreateBundleDownloader(string location, bool recursiveDownload, int downloadingMaxNumber, int failedTryAgain, int timeout = 60)
+        public ResourceDownloaderOperation CreateBundleDownloader(string location, bool recursiveDownload, int downloadingMaxNumber, int failedTryAgain)
         {
             DebugCheckInitialize();
             var assetInfo = ConvertLocationToAssetInfo(location, null);
             AssetInfo[] assetInfos = new AssetInfo[] { assetInfo };
             return _playModeImpl.CreateResourceDownloaderByPaths(assetInfos, recursiveDownload, downloadingMaxNumber, failedTryAgain);
         }
-        public ResourceDownloaderOperation CreateBundleDownloader(string location, int downloadingMaxNumber, int failedTryAgain, int timeout = 60)
+        public ResourceDownloaderOperation CreateBundleDownloader(string location, int downloadingMaxNumber, int failedTryAgain)
         {
             return CreateBundleDownloader(location, false, downloadingMaxNumber, failedTryAgain);
         }
@@ -1026,8 +1025,7 @@ namespace YooAsset
         /// <param name="recursiveDownload">下载资源对象所属资源包内所有资源对象依赖的资源包</param>
         /// <param name="downloadingMaxNumber">同时下载的最大文件数</param>
         /// <param name="failedTryAgain">下载失败的重试次数</param>
-        /// <param name="timeout">超时时间</param>
-        public ResourceDownloaderOperation CreateBundleDownloader(string[] locations, bool recursiveDownload, int downloadingMaxNumber, int failedTryAgain, int timeout = 60)
+        public ResourceDownloaderOperation CreateBundleDownloader(string[] locations, bool recursiveDownload, int downloadingMaxNumber, int failedTryAgain)
         {
             DebugCheckInitialize();
             List<AssetInfo> assetInfos = new List<AssetInfo>(locations.Length);
@@ -1038,7 +1036,7 @@ namespace YooAsset
             }
             return _playModeImpl.CreateResourceDownloaderByPaths(assetInfos.ToArray(), recursiveDownload, downloadingMaxNumber, failedTryAgain);
         }
-        public ResourceDownloaderOperation CreateBundleDownloader(string[] locations, int downloadingMaxNumber, int failedTryAgain, int timeout = 60)
+        public ResourceDownloaderOperation CreateBundleDownloader(string[] locations, int downloadingMaxNumber, int failedTryAgain)
         {
             return CreateBundleDownloader(locations, false, downloadingMaxNumber, failedTryAgain);
         }
@@ -1050,14 +1048,13 @@ namespace YooAsset
         /// <param name="recursiveDownload">下载资源对象所属资源包内所有资源对象依赖的资源包</param>
         /// <param name="downloadingMaxNumber">同时下载的最大文件数</param>
         /// <param name="failedTryAgain">下载失败的重试次数</param>
-        /// <param name="timeout">超时时间</param>
-        public ResourceDownloaderOperation CreateBundleDownloader(AssetInfo assetInfo, bool recursiveDownload, int downloadingMaxNumber, int failedTryAgain, int timeout = 60)
+        public ResourceDownloaderOperation CreateBundleDownloader(AssetInfo assetInfo, bool recursiveDownload, int downloadingMaxNumber, int failedTryAgain)
         {
             DebugCheckInitialize();
             AssetInfo[] assetInfos = new AssetInfo[] { assetInfo };
             return _playModeImpl.CreateResourceDownloaderByPaths(assetInfos, recursiveDownload, downloadingMaxNumber, failedTryAgain);
         }
-        public ResourceDownloaderOperation CreateBundleDownloader(AssetInfo assetInfo, int downloadingMaxNumber, int failedTryAgain, int timeout = 60)
+        public ResourceDownloaderOperation CreateBundleDownloader(AssetInfo assetInfo, int downloadingMaxNumber, int failedTryAgain)
         {
             return CreateBundleDownloader(assetInfo, false, downloadingMaxNumber, failedTryAgain);
         }
@@ -1069,13 +1066,12 @@ namespace YooAsset
         /// <param name="recursiveDownload">下载资源对象所属资源包内所有资源对象依赖的资源包</param>
         /// <param name="downloadingMaxNumber">同时下载的最大文件数</param>
         /// <param name="failedTryAgain">下载失败的重试次数</param>
-        /// <param name="timeout">超时时间</param>
-        public ResourceDownloaderOperation CreateBundleDownloader(AssetInfo[] assetInfos, bool recursiveDownload, int downloadingMaxNumber, int failedTryAgain, int timeout = 60)
+        public ResourceDownloaderOperation CreateBundleDownloader(AssetInfo[] assetInfos, bool recursiveDownload, int downloadingMaxNumber, int failedTryAgain)
         {
             DebugCheckInitialize();
             return _playModeImpl.CreateResourceDownloaderByPaths(assetInfos, recursiveDownload, downloadingMaxNumber, failedTryAgain);
         }
-        public ResourceDownloaderOperation CreateBundleDownloader(AssetInfo[] assetInfos, int downloadingMaxNumber, int failedTryAgain, int timeout = 60)
+        public ResourceDownloaderOperation CreateBundleDownloader(AssetInfo[] assetInfos, int downloadingMaxNumber, int failedTryAgain)
         {
             return CreateBundleDownloader(assetInfos, false, downloadingMaxNumber, failedTryAgain);
         }
@@ -1162,14 +1158,14 @@ namespace YooAsset
         private void DebugCheckInitialize(bool checkActiveManifest = true)
         {
             if (_initializeStatus == EOperationStatus.None)
-                throw new Exception("Package initialize not completed !");
+                throw new YooPackageException(PackageName, "Package initialize not completed !");
             else if (_initializeStatus == EOperationStatus.Failed)
-                throw new Exception($"Package initialize failed ! {_initializeError}");
+                throw new YooPackageException(PackageName, $"Package initialize failed ! {_initializeError}");
 
             if (checkActiveManifest)
             {
                 if (_playModeImpl.ActiveManifest == null)
-                    throw new Exception("Can not found active package manifest !");
+                    throw new YooPackageException(PackageName, "Can not found active package manifest !");
             }
         }
 
@@ -1181,12 +1177,12 @@ namespace YooAsset
 
             if (typeof(UnityEngine.Behaviour).IsAssignableFrom(type))
             {
-                throw new Exception($"Load asset type is invalid : {type.FullName} !");
+                throw new YooLoadException($"Load asset type is invalid : {type.FullName} !");
             }
 
             if (typeof(UnityEngine.Object).IsAssignableFrom(type) == false)
             {
-                throw new Exception($"Load asset type is invalid : {type.FullName} !");
+                throw new YooLoadException($"Load asset type is invalid : {type.FullName} !");
             }
         }
         #endregion

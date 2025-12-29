@@ -2,6 +2,7 @@
 using System.IO;
 using System.Collections.Generic;
 using System.Linq;
+using UnityEngine;
 
 namespace YooAsset
 {
@@ -56,9 +57,14 @@ namespace YooAsset
 
         #region 自定义参数
         /// <summary>
-        /// 自定义参数：远程服务接口
+        /// 自定义参数：远程服务接口的实例类
         /// </summary>
         public IRemoteServices RemoteServices { private set; get; }
+
+        /// <summary>
+        /// 自定义参数：覆盖安装缓存清理模式
+        /// </summary>
+        public EOverwriteInstallClearMode InstallClearMode { private set; get; } = EOverwriteInstallClearMode.ClearAllManifestFiles;
 
         /// <summary>
         /// 自定义参数：初始化的时候缓存文件校验级别
@@ -66,9 +72,11 @@ namespace YooAsset
         public EFileVerifyLevel FileVerifyLevel { private set; get; } = EFileVerifyLevel.Middle;
 
         /// <summary>
-        /// 自定义参数：覆盖安装缓存清理模式
+        /// 自定义参数：初始化的时候缓存文件校验最大并发数
+        /// 默认值：32（推荐范围 1-128）
+        /// 说明：过大的值可能导致线程池任务过多，影响系统稳定性 
         /// </summary>
-        public EOverwriteInstallClearMode InstallClearMode { private set; get; } = EOverwriteInstallClearMode.ClearAllManifestFiles;
+        public int FileVerifyMaxConcurrency { private set; get; } = 32;
 
         /// <summary>
         /// 自定义参数：数据文件追加文件格式
@@ -82,13 +90,22 @@ namespace YooAsset
 
         /// <summary>
         /// 自定义参数：最大并发连接数
+        /// 默认值：10（推荐范围 1-32）
+        /// 说明：过大的并发数可能被服务器限流，也会增加本地资源消耗 
         /// </summary>
-        public int DownloadMaxConcurrency { private set; get; } = int.MaxValue;
+        public int DownloadMaxConcurrency { private set; get; } = 10;
 
         /// <summary>
         /// 自定义参数：每帧发起的最大请求数
+        /// 默认值：5（推荐范围 1-10） 
+        /// 说明：避免单帧发起过多请求导致卡顿 
         /// </summary>
-        public int DownloadMaxRequestPerFrame { private set; get; } = int.MaxValue;
+        public int DownloadMaxRequestPerFrame { private set; get; } = 5;
+
+        /// <summary>
+        /// 自定义参数：下载任务的看门狗机制监控时间
+        /// </summary>
+        public int DownloadWatchDogTime { private set; get; } = int.MaxValue;
 
         /// <summary>
         /// 自定义参数：启用断点续传的最小尺寸
@@ -101,7 +118,7 @@ namespace YooAsset
         public List<long> ResumeDownloadResponseCodes { private set; get; } = null;
 
         /// <summary>
-        ///  自定义参数：解密方法类
+        ///  自定义参数：解密服务接口的实例类
         /// </summary>
         public IDecryptionServices DecryptionServices { private set; get; }
 
@@ -111,7 +128,7 @@ namespace YooAsset
         public IManifestRestoreServices ManifestServices { private set; get; }
 
         /// <summary>
-        /// 自定义参数：拷贝内置文件服务类
+        /// 自定义参数：拷贝内置文件接口的实例类
         /// </summary>
         public ICopyLocalFileServices CopyLocalFileServices { private set; get; }
         #endregion
@@ -145,6 +162,11 @@ namespace YooAsset
             else if (options.ClearMode == EFileClearMode.ClearUnusedBundleFiles.ToString())
             {
                 var operation = new ClearUnusedCacheBundleFilesOperation(this, manifest);
+                return operation;
+            }
+            else if (options.ClearMode == EFileClearMode.ClearBundleFilesByLocations.ToString())
+            {
+                var operation = new ClearCacheBundleFilesByLocationsOperaiton(this, manifest, options.ClearParam);
                 return operation;
             }
             else if (options.ClearMode == EFileClearMode.ClearBundleFilesByTags.ToString())
@@ -215,13 +237,25 @@ namespace YooAsset
             {
                 RemoteServices = (IRemoteServices)value;
             }
+            else if (name == FileSystemParametersDefine.INSTALL_CLEAR_MODE)
+            {
+                InstallClearMode = (EOverwriteInstallClearMode)value;
+            }
             else if (name == FileSystemParametersDefine.FILE_VERIFY_LEVEL)
             {
                 FileVerifyLevel = (EFileVerifyLevel)value;
             }
-            else if (name == FileSystemParametersDefine.INSTALL_CLEAR_MODE)
+            else if (name == FileSystemParametersDefine.FILE_VERIFY_MAX_CONCURRENCY)
             {
-                InstallClearMode = (EOverwriteInstallClearMode)value;
+                int convertValue = Convert.ToInt32(value);
+                if (convertValue > 256)
+                {
+                    YooLogger.Warning($"FILE_VERIFY_MAX_CONCURRENCY value {convertValue} is too large, clamped to 256. Recommended range: 1 - 128.");
+                }
+
+                // 限制在合理范围内：1-256                                                                             
+                // 超过 256 的并发数对于文件验证来说没有意义，反而会增加线程池压力  
+                FileVerifyMaxConcurrency = Mathf.Clamp(convertValue, 1, 256);
             }
             else if (name == FileSystemParametersDefine.APPEND_FILE_EXTENSION)
             {
@@ -233,11 +267,28 @@ namespace YooAsset
             }
             else if (name == FileSystemParametersDefine.DOWNLOAD_MAX_CONCURRENCY)
             {
-                DownloadMaxConcurrency = Convert.ToInt32(value);
+                int convertValue = Convert.ToInt32(value);
+                if (convertValue > 64)
+                {
+                    YooLogger.Warning($"DOWNLOAD_MAX_CONCURRENCY value {convertValue} is too large, clamped to 64. Recommended range: 1 - 32.");
+                }
+
+                DownloadMaxConcurrency = Mathf.Clamp(convertValue, 1, 64);
             }
             else if (name == FileSystemParametersDefine.DOWNLOAD_MAX_REQUEST_PER_FRAME)
             {
-                DownloadMaxRequestPerFrame = Convert.ToInt32(value);
+                int convertValue = Convert.ToInt32(value);
+                if (convertValue > 20)
+                {
+                    YooLogger.Warning($"DOWNLOAD_MAX_REQUEST_PER_FRAME value {convertValue} is too large, clamped to 20. Recommended range: 1 - 10.");
+                }
+
+                DownloadMaxRequestPerFrame = Mathf.Clamp(convertValue, 1, 20);
+            }
+            else if (name == FileSystemParametersDefine.DOWNLOAD_WATCH_DOG_TIME)
+            {
+                int convertValue = Convert.ToInt32(value);
+                DownloadWatchDogTime = Mathf.Clamp(convertValue, 1, int.MaxValue);
             }
             else if (name == FileSystemParametersDefine.RESUME_DOWNLOAD_MINMUM_SIZE)
             {
@@ -448,7 +499,7 @@ namespace YooAsset
         {
             if (_records.ContainsKey(bundle.BundleGUID))
             {
-                throw new Exception("Should never get here !");
+                throw new YooInternalException();
             }
 
             string infoFilePath = GetBundleInfoFilePath(bundle);
@@ -470,9 +521,9 @@ namespace YooAsset
                 // 写入文件信息
                 WriteBundleInfoFile(infoFilePath, bundle.FileCRC, bundle.FileSize);
             }
-            catch (Exception e)
+            catch (Exception ex)
             {
-                YooLogger.Error($"Failed to write cache file ! {e.Message}");
+                YooLogger.Error($"Failed to write cache file ! {ex.Message}");
                 return false;
             }
 
@@ -493,22 +544,22 @@ namespace YooAsset
         }
 
         private readonly BufferWriter _sharedBuffer = new BufferWriter(1024);
-        public void WriteBundleInfoFile(string filePath, string dataFileCRC, long dataFileSize)
+        public void WriteBundleInfoFile(string filePath, uint dataFileCRC, long dataFileSize)
         {
             using (FileStream fs = new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.Read))
             {
                 _sharedBuffer.Clear();
-                _sharedBuffer.WriteUTF8(dataFileCRC);
+                _sharedBuffer.WriteUInt32(dataFileCRC);
                 _sharedBuffer.WriteInt64(dataFileSize);
                 _sharedBuffer.WriteToStream(fs);
                 fs.Flush();
             }
         }
-        public void ReadBundleInfoFile(string filePath, out string dataFileCRC, out long dataFileSize)
+        public void ReadBundleInfoFile(string filePath, out uint dataFileCRC, out long dataFileSize)
         {
             byte[] binaryData = FileUtility.ReadAllBytes(filePath);
             BufferReader buffer = new BufferReader(binaryData);
-            dataFileCRC = buffer.ReadUTF8();
+            dataFileCRC = buffer.ReadUInt32();
             dataFileSize = buffer.ReadInt64();
         }
         #endregion

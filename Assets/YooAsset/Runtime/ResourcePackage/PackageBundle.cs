@@ -25,7 +25,7 @@ namespace YooAsset
         /// <summary>
         /// 文件校验码
         /// </summary>
-        public string FileCRC;
+        public uint FileCRC;
 
         /// <summary>
         /// 文件大小（字节数）
@@ -76,7 +76,7 @@ namespace YooAsset
             get
             {
                 if (string.IsNullOrEmpty(_fileName))
-                    throw new Exception("Should never get here !");
+                    throw new YooInternalException("File name can not be null or empty.");
                 return _fileName;
             }
         }
@@ -90,7 +90,7 @@ namespace YooAsset
             get
             {
                 if (string.IsNullOrEmpty(_fileExtension))
-                    throw new Exception("Should never get here !");
+                    throw new YooInternalException("File extension can not be null or empty.");
                 return _fileExtension;
             }
         }

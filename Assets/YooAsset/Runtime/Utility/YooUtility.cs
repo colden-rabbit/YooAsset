@@ -242,9 +242,9 @@ namespace YooAsset
             {
                 return FileSHA1(filePath);
             }
-            catch (Exception e)
+            catch (Exception ex)
             {
-                YooLogger.Exception(e);
+                YooLogger.Exception(ex);
                 return string.Empty;
             }
         }
@@ -302,9 +302,9 @@ namespace YooAsset
             {
                 return FileMD5(filePath);
             }
-            catch (Exception e)
+            catch (Exception ex)
             {
-                YooLogger.Exception(e);
+                YooLogger.Exception(ex);
                 return string.Empty;
             }
         }
@@ -339,6 +339,11 @@ namespace YooAsset
             byte[] buffer = Encoding.UTF8.GetBytes(str);
             return BytesCRC32(buffer);
         }
+        public static uint StringCRC32Value(string str)
+        {
+            byte[] buffer = Encoding.UTF8.GetBytes(str);
+            return BytesCRC32Value(buffer);
+        }
 
         /// <summary>
         /// 获取文件的CRC32
@@ -348,6 +353,13 @@ namespace YooAsset
             using (FileStream fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read))
             {
                 return StreamCRC32(fs);
+            }
+        }
+        public static uint FileCRC32Value(string filePath)
+        {
+            using (FileStream fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read))
+            {
+                return StreamCRC32Value(fs);
             }
         }
 
@@ -360,10 +372,22 @@ namespace YooAsset
             {
                 return FileCRC32(filePath);
             }
-            catch (Exception e)
+            catch (Exception ex)
             {
-                YooLogger.Exception(e);
+                YooLogger.Exception(ex);
                 return string.Empty;
+            }
+        }
+        public static uint FileCRC32ValueSafely(string filePath)
+        {
+            try
+            {
+                return FileCRC32Value(filePath);
+            }
+            catch (Exception ex)
+            {
+                YooLogger.Exception(ex);
+                return 0;
             }
         }
 
@@ -376,6 +400,12 @@ namespace YooAsset
             byte[] hashBytes = hash.ComputeHash(stream);
             return ToString(hashBytes);
         }
+        public static uint StreamCRC32Value(Stream stream)
+        {
+            CRC32Algorithm hash = new CRC32Algorithm();
+            hash.ComputeHash(stream);
+            return hash.CRCValue;
+        }
 
         /// <summary>
         /// 获取字节数组的CRC32
@@ -385,6 +415,12 @@ namespace YooAsset
             CRC32Algorithm hash = new CRC32Algorithm();
             byte[] hashBytes = hash.ComputeHash(buffer);
             return ToString(hashBytes);
+        }
+        public static uint BytesCRC32Value(byte[] buffer)
+        {
+            CRC32Algorithm hash = new CRC32Algorithm();
+            hash.ComputeHash(buffer);
+            return hash.CRCValue;
         }
         #endregion
     }

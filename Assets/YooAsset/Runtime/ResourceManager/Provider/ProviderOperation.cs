@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System;
 
 namespace YooAsset
 {
@@ -66,6 +67,16 @@ namespace YooAsset
         /// </summary>
         public bool IsDestroyed { private set; get; } = false;
 
+        /// <summary>
+        /// 加载任务是否进行中
+        /// </summary>
+        private bool IsLoading
+        {
+            get
+            {
+                return _steps == ESteps.WaitBundleLoader || _steps == ESteps.ProcessBundleResult;
+            }
+        }
 
         private ESteps _steps = ESteps.None;
         protected readonly ResourceManager _resManager;
@@ -106,6 +117,13 @@ namespace YooAsset
         {
             if (_steps == ESteps.None || _steps == ESteps.Done)
                 return;
+
+            // 注意：未在加载中的任务可以挂起！
+            if (IsLoading == false)
+            {
+                if (RefCount <= 0)
+                    return;
+            }
 
             if (_steps == ESteps.StartBundleLoader)
             {
@@ -190,8 +208,9 @@ namespace YooAsset
             // 检测是否为正常销毁
             if (IsDone == false)
             {
-                Error = "User abort !";
+                _steps = ESteps.Done;
                 Status = EOperationStatus.Failed;
+                Error = "User abort !";
             }
 
             // 减少引用计数
@@ -206,8 +225,8 @@ namespace YooAsset
         /// </summary>
         public bool CanDestroyProvider()
         {
-            // 注意：在进行资源加载过程时不可以销毁
-            if (_steps == ESteps.ProcessBundleResult)
+            // 注意：正在加载中的任务不可以销毁
+            if (IsLoading)
                 return false;
 
             return RefCount <= 0;
@@ -232,10 +251,10 @@ namespace YooAsset
         public void ReleaseHandle(HandleBase handle)
         {
             if (RefCount <= 0)
-                throw new System.Exception("Should never get here !");
+                throw new YooInternalException($"Attempting to release handle when RefCount is already zero. Asset : {MainAssetInfo.AssetPath}");
 
             if (_handles.Remove(handle) == false)
-                throw new System.Exception("Should never get here !");
+                throw new YooInternalException($"Handle not found in cache list. Asset: {MainAssetInfo.AssetPath}");
 
             // 引用计数减少
             RefCount--;
@@ -254,6 +273,17 @@ namespace YooAsset
         }
 
         /// <summary>
+        /// 尝试卸载资源包
+        /// </summary>
+        public void TryUnloadBundle()
+        {
+            if (_resManager.AutoUnloadBundleWhenUnused)
+            {
+                _resManager.TryUnloadUnusedAsset(MainAssetInfo, 10);
+            }
+        }
+
+        /// <summary>
         /// 结束流程
         /// </summary>
         protected void InvokeCompletion(string error, EOperationStatus status)
@@ -263,13 +293,19 @@ namespace YooAsset
             Status = status;
 
             // 注意：创建临时列表是为了防止外部逻辑在回调函数内创建或者释放资源句柄。
-            // 注意：回调方法如果发生异常，会阻断列表里的后续回调方法！
             List<HandleBase> tempers = _handles.ToList();
-            foreach (var hande in tempers)
+            foreach (var handle in tempers)
             {
-                if (hande.IsValid)
+                if (handle.IsValid)
                 {
-                    hande.InvokeCallback();
+                    try
+                    {
+                        handle.InvokeCallback();
+                    }
+                    catch (Exception ex)
+                    {
+                        YooLogger.Error($"Exception in completion callback: {ex}");
+                    }
                 }
             }
         }
@@ -287,7 +323,7 @@ namespace YooAsset
             }
 
             if (status.TotalBytes == 0)
-                throw new System.Exception("Should never get here !");
+                throw new YooInternalException("Download total size can not be zero.");
 
             status.IsDone = status.DownloadedBytes == status.TotalBytes;
             status.Progress = (float)status.DownloadedBytes / status.TotalBytes;
