@@ -115,9 +115,9 @@ namespace YooAsset
 
                     // 检测配置
                     if (Manifest.EnableAddressable && Manifest.LocationToLower)
-                        throw new YooManifestException("Addressable not support location to lower !");
+                        throw new System.Exception("Addressable not support location to lower !");
                     if (Manifest.EnableAddressable == false && Manifest.ReplaceAssetPathWithAddress)
-                        throw new YooManifestException("Replace asset path with address need enable Addressable !");
+                        throw new System.Exception("Replace asset path with address need enable Addressable !");
 
                     _steps = ESteps.PrepareAssetList;
                 }
@@ -216,12 +216,12 @@ namespace YooAsset
                     Status = EOperationStatus.Succeed;
                 }
             }
-            catch (System.Exception ex)
+            catch (System.Exception e)
             {
                 Manifest = null;
                 _steps = ESteps.Done;
                 Status = EOperationStatus.Failed;
-                Error = ex.Message;
+                Error = e.Message;
             }
         }
         internal override void InternalWaitForAsyncComplete()
@@ -264,23 +264,27 @@ namespace YooAsset
             manifest.AssetList.Add(packageAsset);
 
             // 注意：我们不允许原始路径存在重名
+            // 说明：清单是构建期生成的可信数据，重名只会因构建错误产生，仅在开发期校验即可，发行版省去一次哈希查找。
             string assetPath = packageAsset.AssetPath;
+#if UNITY_EDITOR || DEBUG
             if (manifest.AssetDic.ContainsKey(assetPath))
-                throw new YooManifestException($"AssetPath have existed : {assetPath}");
-            else
-                manifest.AssetDic.Add(assetPath, packageAsset);
+                throw new System.Exception($"AssetPath have existed : {assetPath}");
+#endif
+            manifest.AssetDic.Add(assetPath, packageAsset);
 
             // 填充AssetPathMapping1
             {
                 string location = packageAsset.AssetPath;
 
                 // 添加原生路径的映射
+#if UNITY_EDITOR || DEBUG
                 if (manifest.AssetPathMapping1.ContainsKey(location))
-                    throw new YooManifestException($"Location have existed : {location}");
-                else
-                    manifest.AssetPathMapping1.Add(location, packageAsset.AssetPath);
+                    throw new System.Exception($"Location have existed : {location}");
+#endif
+                manifest.AssetPathMapping1.Add(location, packageAsset.AssetPath);
 
                 // 添加无后缀名路径的映射
+                // 注意：无后缀名重名属于合法运行时情况（仅警告并跳过），因此该校验必须在发行版也执行。
                 if (manifest.SupportExtensionless)
                 {
                     string locationWithoutExtension = Path.ChangeExtension(location, null);
@@ -297,10 +301,11 @@ namespace YooAsset
             // 填充AssetPathMapping2
             if (manifest.IncludeAssetGUID)
             {
+#if UNITY_EDITOR || DEBUG
                 if (manifest.AssetPathMapping2.ContainsKey(packageAsset.AssetGUID))
-                    throw new YooManifestException($"AssetGUID have existed : {packageAsset.AssetGUID}");
-                else
-                    manifest.AssetPathMapping2.Add(packageAsset.AssetGUID, packageAsset.AssetPath);
+                    throw new System.Exception($"AssetGUID have existed : {packageAsset.AssetGUID}");
+#endif
+                manifest.AssetPathMapping2.Add(packageAsset.AssetGUID, packageAsset.AssetPath);
             }
 
             // 添加可寻址地址
@@ -309,10 +314,11 @@ namespace YooAsset
                 string location = packageAsset.Address;
                 if (string.IsNullOrEmpty(location) == false)
                 {
+#if UNITY_EDITOR || DEBUG
                     if (manifest.AssetPathMapping1.ContainsKey(location))
-                        throw new YooManifestException($"Location have existed : {location}");
-                    else
-                        manifest.AssetPathMapping1.Add(location, packageAsset.AssetPath);
+                        throw new System.Exception($"Location have existed : {location}");
+#endif
+                    manifest.AssetPathMapping1.Add(location, packageAsset.AssetPath);
                 }
             }
         }
