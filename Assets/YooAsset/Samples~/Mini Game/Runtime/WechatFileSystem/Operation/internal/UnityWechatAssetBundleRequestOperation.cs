@@ -1,4 +1,4 @@
-﻿#if UNITY_WEBGL && WEIXINMINIGAME
+﻿#if UNITY_WEBGL && UNITY_WECHATMINIGAME
 using UnityEngine.Networking;
 using UnityEngine;
 using WeChatWASM;

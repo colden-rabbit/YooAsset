@@ -70,7 +70,7 @@ internal class FsmInitializePackage : IStateNode
         // WebGL运行模式
         if (playMode == EPlayMode.WebPlayMode)
         {
-#if UNITY_WEBGL && WEIXINMINIGAME && !UNITY_EDITOR
+#if UNITY_WEBGL && UNITY_WECHATMINIGAME && !UNITY_EDITOR
             var createParameters = new WebPlayModeParameters();
 			string defaultHostServer = GetHostServerURL();
             string fallbackHostServer = GetHostServerURL();
